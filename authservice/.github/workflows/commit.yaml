@@ -1,0 +1,127 @@
+name: "commit"
+
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**/*.md"
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**/*.md"
+
+  # Allows triggering the workflow manually in github actions page.
+  workflow_dispatch:
+
+defaults:
+  run: # use bash for all operating systems unless overridden.
+    shell: bash
+
+jobs:
+  check:
+    name: check
+    timeout-minutes: 90 # instead of 360 by default.
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Cancel when duplicated
+        uses: styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v2 # shallow checkout.
+
+      - name: Download cache for Tools
+        uses: actions/cache@v2
+        with:
+          path: ./.cache/tools
+          key: ${{ runner.os }}-check-tools-${{ hashFiles('Tools.mk') }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v2 # prepare Go. This is required for tools.
+        with:
+          go-version: 1.17.x
+
+      - name: Check format
+        run: make check
+
+  test:
+    needs: check
+    name: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90 # instead of 360 by default.
+    strategy:
+      fail-fast: false # don't fail fast as sometimes failures are operating system specific.
+      matrix:
+        include:
+          - os: macos-11
+            mode: default
+          - os: ubuntu-18.04
+            mode: clang
+          - os: ubuntu-18.04
+            mode: clang-fips
+    steps:
+      - name: Cancel when duplicated
+        uses: styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v2 # shallow checkout.
+
+      - name: Download cache for Tools
+        uses: actions/cache@v2
+        with:
+          path: ./.cache/tools
+          key: ${{ runner.os }}-${{ matrix.mode }}-tools-${{ hashFiles('Tools.mk') }}
+
+      - name: Download cache for Bazel
+        uses: actions/cache@v2
+        with:
+          path: ./.cache/bazel
+          key: ${{ runner.os }}-${{ matrix.mode }}-bazel-${{ hashFiles('Tools.mk', '.bazelversion', 'bazel/repositories.bzl') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.mode }}-bazel-
+
+      - name: Setup Go
+        uses: actions/setup-go@v2 # prepare Go. This is required for tools.
+        with:
+          go-version: 1.17.x
+
+      - name: Install macOS prerequisites
+        run: brew install cmake ninja coreutils # make is already installed.
+        if: runner.os == 'macOS'
+
+      - name: Install Ubuntu prerequisites
+        run: sudo apt-get update && sudo apt-get -y install cmake ninja-build # make is already installed.
+        if: runner.os == 'Linux'
+
+      # Prepare clang tooling and config when it is required.
+      - name: Setup clang
+        if: runner.os == 'Linux' && (matrix.mode == 'clang' || matrix.mode == 'clang-fips')
+        # This downloads the required clang tooling when it is not downloaded yet.
+        run: |
+          make clang.bazelrc
+          echo "BAZEL_FLAGS=--config=libc++" >> $GITHUB_ENV
+
+      # Set BAZEL_FLAGS to FIPS mode only when it is required.
+      - name: Setup FIPS mode
+        if: runner.os == 'Linux' && matrix.mode == 'clang-fips'
+        run: echo "BAZEL_FLAGS=--config=libc++ --define=boringssl=fips" >> $GITHUB_ENV
+
+      - name: Run all tests
+        run: make test
+
+      # Make sure we have static binary on Linux
+      - name: Require static binary
+        if: runner.os == 'Linux' && matrix.mode == 'clang'
+        run: |
+          make requirestatic
+
+      # Upload the binary as an artifact.
+      - uses: actions/upload-artifact@v3
+        if: runner.os == 'Linux' && matrix.mode == 'clang'
+        with:
+          name: auth_server
+          path: bazel-bin/src/main/auth_server.stripped

@@ -1,0 +1,59 @@
+#
+# A ConfigMap which contains the configuration of the authservice.
+# In bookinfo-with-authservice-template.yaml the authservice container is created
+# with this ConfigMap volume mounted inside the container at /etc/authservice, which
+# is the location where the authservice expects the file to exist.
+#
+
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: authservice
+data:
+  # We listen on 0.0.0.0 since Istio 1.10, it changes the sidecar configuration only support
+  # application listen on pod IP. See https://istio.io/latest/blog/2021/upcoming-networking-changes/
+  # for more details.
+  config.json: |
+    {
+      "listen_address": "0.0.0.0",
+      "listen_port": "10003",
+      "log_level": "trace",
+      "threads": 8,
+      "allow_unmatched_requests": "false",
+      "chains": [
+        {
+          "name": "idp_filter_chain",
+          "match": {
+            "header": ":authority",
+            "prefix": "localhost",
+          },
+          "filters": [
+          {
+            "oidc":
+              {
+                "authorization_uri": "{{ .Values.oidc.authorizationURI }}",
+                "token_uri": "{{ .Values.oidc.tokenURI }} ",
+                "callback_uri": "https://localhost:8443/productpage/oauth/callback",
+                "jwks_fetcher": {
+                  "jwks_uri": "https://www.googleapis.com/oauth2/v3/certs",
+                  "periodic_fetch_interval_sec": 10
+                },
+                "client_id": "{{ .Values.oidc.clientID }}",
+                "client_secret": "{{ .Values.oidc.clientSecret }}",
+                "scopes": [],
+                "cookie_name_prefix": "productpage",
+                "id_token": {
+                  "preamble": "Bearer",
+                  "header": "Authorization"
+                },
+                "logout": {
+                  "path": "/authservice_logout",
+                  "redirect_uri": "https://localhost:8443/some/logout/path"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }

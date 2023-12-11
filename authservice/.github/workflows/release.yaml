@@ -1,0 +1,124 @@
+name: "release" # please read on RELEASE.md on how to trigger this workflow.
+
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+**"  # For example: 0.5.0, 0.5.1-rc2.
+
+defaults:
+  run: # use bash for all operating systems unless overridden.
+    shell: bash
+
+jobs:
+  dist:
+    name: dist
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90 # instead of 360 by default.
+    strategy:
+      fail-fast: false # don't fail fast as sometimes failures are operating system specific.
+      matrix:
+        include:
+          - os: macos-11
+            mode: default
+          - os: ubuntu-18.04
+            mode: clang
+          - os: ubuntu-18.04
+            mode: clang-fips
+    steps:
+      - name: Cancel when duplicated
+        uses: styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Checkout
+        uses: actions/checkout@v2 # shallow checkout.
+
+      - name: Download cache for Tools
+        uses: actions/cache@v2
+        with:
+          path: ./.cache/tools
+          key: ${{ runner.os }}-${{ matrix.mode }}-tools-${{ hashFiles('Tools.mk') }}
+
+      - name: Download cache for Bazel
+        uses: actions/cache@v2
+        with:
+          path: ./.cache/bazel
+          key: ${{ runner.os }}-${{ matrix.mode }}-bazel-${{ hashFiles('Tools.mk', '.bazelversion', 'bazel/repositories.bzl') }}
+          restore-keys: ${{ runner.os }}-${{ matrix.mode }}-bazel-
+
+      - name: Setup Go
+        uses: actions/setup-go@v2 # prepare Go. This is required for tools.
+        with:
+          go-version: 1.17.x
+
+      - name: Install macOS prerequisites
+        run: brew install cmake ninja coreutils # make is already installed.
+        if: runner.os == 'macOS'
+
+      - name: Install Ubuntu prerequisites
+        run: sudo apt-get update && sudo apt-get -y install cmake ninja-build # make is already installed.
+        if: runner.os == 'Linux'
+
+      # Prepare clang tooling and config when it is required.
+      - name: Setup clang
+        if: runner.os == 'Linux' && (matrix.mode == 'clang' || matrix.mode == 'clang-fips')
+        # This downloads the required clang tooling when it is not downloaded yet.
+        # GITHUB_REF: refs/tags/0.5.1-rc1, resulted VERSION: "0.5.1".
+        run: |
+          make clang.bazelrc
+          echo "BAZEL_FLAGS=--config=libc++" >> $GITHUB_ENV
+          echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      # Set BAZEL_FLAGS to FIPS mode only when it is required.
+      - name: Setup FIPS mode
+        if: runner.os == 'Linux' && matrix.mode == 'clang-fips'
+        run: echo "BAZEL_FLAGS=--config=libc++ --define=boringssl=fips" >> $GITHUB_ENV
+
+      - name: Create artifacts
+        run: MODE=${{ matrix.mode }} make dist
+
+      - name: Require static binary
+        if: runner.os == 'Linux' && matrix.mode == 'clang'
+        run: |
+          make requirestatic
+
+      - name: Login to GitHub Container Registry
+        if: runner.os == 'Linux' && matrix.mode == 'clang'
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_REGISTRY_TOKEN_INCFLY }}
+
+      - name: Build and push image
+        if: runner.os == 'Linux' && matrix.mode == 'clang'
+        run: |
+          make image push
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: dist-${{ runner.os }}-${{ matrix.mode }}
+          path: dist
+
+  release:
+    name: release
+    runs-on: ubuntu-18.04
+    needs: dist
+    timeout-minutes: 90 # instead of 360 by default.
+    steps:
+      - name: Cancel when duplicated
+        uses: styfle/cancel-workflow-action@0.4.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Download artifacts # get all of the uploaded artifacts
+        uses: actions/download-artifact@v2
+
+      - name: Release downloaded artifacts
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist-Linux-clang/**/*.tar.gz
+            dist-Linux-clang-fips/**/*.tar.gz
+            dist-macOS-default/**/*.tar.gz
