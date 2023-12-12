@@ -7,9 +7,12 @@ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem \
  -days 365 -nodes -subj '/CN=localhost'
 
 # upload the certs by creating a k8s secret
-kubectl create -n default secret tls ingress-tls-cert --key=key.pem \
+kubectl create -n istio-system secret tls ingress-tls-cert --key=key.pem \
   --cert=cert.pem
+
+# kubectl create -n keycloak secret tls ingress-tls-cert --key=key.pem \
+#   --cert=cert.pem
 
 # make sure the secret is correctly created
 echo; echo; echo "Verify that the secret is created:"
-kubectl get secret -n default | grep ingress-tls-cert
+kubectl get secret -nistio-system | grep ingress-tls-cert
