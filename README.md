@@ -1,7 +1,7 @@
 # AuthZ w/ AuthService, AuthorizationPolicy, and RequestAuthentication POC
 
-- [Docs](https://github.com/istio-ecosystem/authservice/tree/master/bookinfo-example#further-protect-via-requestauthentication-and-authorization-policy)
-
+- [AuthService Docs](https://github.com/istio-ecosystem/authservice/tree/master/bookinfo-example#further-protect-via-requestauthentication-and-authorization-policy)
+- [Keycloak Downloads](https://www.keycloak.org/downloads)
 
 ## Demo 
 
@@ -12,18 +12,18 @@ Install Keycloak
 ```bash
 helm install uds-kc oci://registry-1.docker.io/bitnamicharts/keycloak
 
-# or locally
-./bin/kc.sh start-dev --https-certificate-file=cert.pem --https-certificate-key-file=key.pem 
+# or locally because authservice required https
+./bin/kc.sh start-dev --https-certificate-file=cert.pem --https-certificate-key-file=key.pem --https-port 443
 ```
 
-Get the keycloak admin password
+Get the keycloak password (for the kubernetes version, local you create your own user and password)
 
 ```bash
 PW=$(k get secret   uds-kc-keycloak   -ojsonpath='{.data.admin-password}' | base64 -d)
 echo $PW | pbcopy
 ```
 
-Login [console](http://localhost:3000) with user `user` and password `$PW`, create a new realm `uds-prod`
+Login [console](http://localhost:3000) for kubernetes keycloak with user `user` and password `$PW`, use this link for [local](https://0.0.0.0:8443), create a new realm `uds-prod`
 
 ```bash
 k port-forward svc/uds-kc-keycloak 3000:80 -n keycloak
@@ -53,13 +53,15 @@ bash ./authservice/bookinfo-example/scripts/generate-self-signed-certs-for-ingre
 ```
 
 
-Deploy the external authorizer and verify it is up.
+<!-- Deploy the external authorizer and verify it is up.
+
+NOT NECESSARY
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/extauthz/ext-authz.yaml
 
- kubectl logs "$(kubectl get pod -l app=ext-authz  -o jsonpath={.items..metadata.name})"  -c ext-authz
-```     
+kubectl logs "$(kubectl get pod -l app=ext-authz  -o jsonpath={.items..metadata.name})"  -c ext-authz
+```      -->
 
 Define the external authorizer in the `extensionProviders` section of istio `cm`
 
@@ -118,7 +120,9 @@ EOF
 ```
 
 
-Install autservice via helm 
+Install autservice via helm, notice there is a helm [`values.yaml`](./authservice/bookinfo-example/authservice/values.yaml) file that sets the `oidc.clientID` and `oidc.clientSecret`.
+
+Values for these can be found in `realmSettings.endpoints.OpenID_EndpointConfig`, follow this [link](https://0.0.0.0:8443/realms/uds/.well-known/openid-configuration) for more openid-configuration.
 
 ```bash
 cd authservice/bookinfo-example
@@ -135,28 +139,35 @@ helm template authservice \
    | kubectl apply -f -
 ```
 
-### Deploy Bookinfo 
+Before we go on, check the logs for the auth service pod, we need to update a configmap because it is chatting with googleapis.com:443..
 
 ```bash
-kubectl create -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/platform/kube/bookinfo.yaml
-
-kubectl create -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/networking/bookinfo-gateway.yaml
+┌─[cmwylie19@Cases-MacBook-Pro] - [~/istio-authz-jwt/authservice/bookinfo-example] - [2023-12-12 03:30:16]
+└─[0] <git:(main 04e5b5b✱) > k logs -f -l app=authservice
+[2023-12-12 20:29:59.784] [console] [trace] Get: closing connection, response payload size 1033
+[2023-12-12 20:29:59.790] [console] [debug] status for jwks parsing: parseJwks, OK
+[2023-12-12 20:30:09.793] [console] [trace] Get
+[2023-12-12 20:30:09.855] [console] [info] Get: opening connection to www.googleapis.com:443
+[2023-12-12 20:30:09.910] [console] [trace] Get: closing connection, response payload size 1033
+[2023-12-12 20:30:09.917] [console] [debug] status for jwks parsing: parseJwks, OK
+[2023-12-12 20:30:19.917] [console] [trace] Get
 ```
-```
+Get the configmap and make edits
 
 ```bash
-kubectl port-forward service/istio-ingressgateway 3000:443 -n istio-system
+ k get cm authservice -oyaml | pbcopy
 ```
 
-Visit [https://localhost:8443/productpage](https://localhost:8443/productpage) and login with `user` and `password`
+Edits, make sure they match up with the .well-known/openid-configuration
 
-```
-kubectl replace -f -<<EOF
+
+```yaml
+k replace -f -<<EOF
 apiVersion: v1
 data:
   config.json: |
     {
-      "listen_address": "127.0.0.1",
+      "listen_address": "0.0.0.0",
       "listen_port": "10003",
       "log_level": "trace",
       "threads": 8,
@@ -172,11 +183,11 @@ data:
           {
             "oidc":
               {
-                "authorization_uri": "https://localhost:8443/realms/uds/protocol/openid-connect/auth",
-                "token_uri": "https://localhost:8443/realms/uds/protocol/openid-connect/token ",
-                "callback_uri": "https://localhost:3000/productpage/oauth/callback",
+                "authorization_uri": "https://0.0.0.0/realms/uds/protocol/openid-connect/auth",
+                "token_uri": "https://0.0.0.0/realms/uds/protocol/openid-connect/token",
+                "callback_uri": "https://localhost/productpage/oauth/callback",
                 "jwks_fetcher": {
-                  "jwks_uri": "https://localhost:8443/realms/uds/protocol/openid-connect/certs",
+                  "jwks_uri": "https://0.0.0.0/realms/uds/protocol/openid-connect/certs",
                   "periodic_fetch_interval_sec": 10
                 },
                 "client_id": "bookinfo",
@@ -189,7 +200,7 @@ data:
                 },
                 "logout": {
                   "path": "/authservice_logout",
-                  "redirect_uri": "https://localhost:8443/some/logout/path"
+                  "redirect_uri": "https://localhost/some/logout/path"
                 }
               }
             }
@@ -204,49 +215,35 @@ metadata:
 EOF
 ```
 
+Restart the pod and listen again
 
-Edit VS
-
-```yaml
-kubectl replace -f -<<EOF
-apiVersion: networking.istio.io/v1beta1
-kind: VirtualService
-metadata:
-  name: bookinfo
-  namespace: default
-spec:
-  gateways:
-  - bookinfo-gateway
-  hosts:
-  - '*'
-  http:
-#   - match:
-#     - uri:
-#         prefix: /realms
-#     route:
-#     - destination:
-#         host: uds-kc-keycloak 
-#         port:
-#           number: 80
-  - match:
-    - uri:
-        prefix: /productpage/oauth
-    - uri:
-        exact: /authservice_logout
-    - uri:
-        exact: /productpage
-    - uri:
-        prefix: /static
-    - uri:
-        exact: /login
-    - uri:
-        exact: /logout
-    - uri:
-        prefix: /api/v1/
-    route:
-    - destination:
-        host: productpage
-        port:
-          number: 9080
-EOF
+```bash
+k delete po -l app=authservice --force
 ```
+
+[Listen to pod logs]
+```bash
+k logs -f -l app=authservice
+```
+
+In this case I get an error everytime, no matter the port
+
+```bash
+[2023-12-12 20:38:39.284] [console] [info] Get: opening connection to 0.0.0.0:443
+[2023-12-12 20:38:39.289] [console] [error] Get: unexpected exception: Connection refused [system:111]
+[2023-12-12 20:38:39.289] [console] [warning] operator(): HTTP connection error
+[2023-12-12 20:38:41.397] [console] [warning] onReadDone: chain:idp_filter_chain JWKS is not ready
+```
+
+I believe it is that it does not trust the Keycloak CA
+### Deploy Bookinfo 
+
+```bash
+kubectl create -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/platform/kube/bookinfo.yaml
+```
+
+```bash
+kubectl port-forward service/istio-ingressgateway 3000:443 -n istio-system
+```
+
+Visit [https://localhost:8443/productpage](https://localhost:8443/productpage) 
