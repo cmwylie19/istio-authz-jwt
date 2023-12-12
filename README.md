@@ -9,7 +9,7 @@
 Relevant [code](https://github.com/istio-ecosystem/authservice/blob/02b9101ad15451accfb9e572f037160056d41c1f/src/common/http/http.cc#L610)
 
 
-Seems like there may ne a problem with KeyCloak's `jwks_uri` endpoint. It returns 200 when being curled but 404 when being called by authservice.
+The problem is with KeyCloak's `jwks_uri` endpoint.
 
 ```bash
 curl -k -X GET -i https://www.googleapis.com/oauth2/v3/certs             
@@ -291,8 +291,8 @@ k logs -l app=authservice -f
 [2023-12-12 20:38:41.397] [console] [warning] onReadDone: chain:idp_filter_chain JWKS is not ready
 ```
 
-I believe it is that it does not trust the Keycloak CA
-### Deploy Bookinfo 
+I believe it is that it does not trust the Keycloak CA, the endpoint is open
+### Deploy Bookinfo [not here yet]
 
 ```bash
 kubectl create -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/bookinfo/platform/kube/bookinfo.yaml
