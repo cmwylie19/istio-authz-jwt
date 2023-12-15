@@ -90,11 +90,8 @@ spec:
   action: CUSTOM
   provider:
     name: authservice-grpc
-  rules:
-  - to:
-    - operation:
-        notPaths:
-        - /public
+  rules: 
+  - {}
   selector:
     matchLabels:
       app: istio-ingressgateway
@@ -127,6 +124,7 @@ kubectl get cm istio -n istio-system -oyaml | pbcopy
 
 Edit the `cm` adding the `extensionProviders` section
 
+(#make file of IstioOperator crd `istio install -f filename)
 ```yaml
 kubectl replace -f -<<EOF
 apiVersion: v1
@@ -134,7 +132,7 @@ data:
   mesh: |-
     # Add the following content to define the external authorizers.
     accessLogFile: /dev/stdout
-    extensionProvider:
+    extensionProviders:
     - name: "authservice-grpc"
       envoyExtAuthzGrpc:
         service: authservice.default.svc.cluster.local
@@ -189,7 +187,7 @@ Get the configmap and make edits
 ```
 
 `jwks` is from the keycloak realm endpoints, I had to pivot here due to authservice not trusting the `jwks_uri`.
-
+note: using local mac ip address to resolve the keycloak token uri. Because Keycloak is not running on Kubernetes or Docker bc of the cert issues 
 ```yaml
 k replace -f -<<EOF
 apiVersion: v1
@@ -212,9 +210,10 @@ data:
           {
             "oidc":
               {
+                "skip_verify_peer_cert": true,
                 "authorization_uri": "https://0.0.0.0/realms/uds/protocol/openid-connect/auth",
-                "token_uri": "https://0.0.0.0/realms/uds/protocol/openid-connect/token",
-                "callback_uri": "https://localhost/productpage/oauth/callback",
+                "token_uri": "https://192.168.4.21/realms/uds/protocol/openid-connect/token",
+                "callback_uri": "https://localhost:3000/productpage/oauth/callback",
                 "jwks": '{"keys":[{"kid":"COyMcu1srOaSWwYdFm4ply8nMVhYdTv4FJDC6bNyHFk","kty":"RSA","alg":"RS256","use":"sig","n":"8XsiNnMqUbRoPSJT9GE6U11aCg-rbJ18BpxEDRlSXOGfZejLCdP1d0T3SIPOBOSt8BkjoPGZvgrAK54FDiY3zXZD5XsxyBaHQanb0RmJWtJRGexUOQjyX_Iet08tRx353tdckvjQ5P6Zdha2tc5Zny9xpAp3p8tmonXJuokoX5qfr6dJlNgbB1BGas29pblbFdoho4tLfrrANBgtFLPQVJWDfm8SgeipPOpeXdQ8i5eJ9h_pz-N4xaaoyWaBzd6R0KtX9Rp4ZGqlbdlum1Y2zEX0RWsrlqW5vmHbs5_7__QVmhyN9KH8HAVHxG5N0e-LURU0Y_h0jeWEtMJJ8-VqMQ","e":"AQAB","x5c":["MIIClTCCAX0CBgGMW8pePjANBgkqhkiG9w0BAQsFADAOMQwwCgYDVQQDDAN1ZHMwHhcNMjMxMjEyMDIwODU4WhcNMzMxMjEyMDIxMDM4WjAOMQwwCgYDVQQDDAN1ZHMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDxeyI2cypRtGg9IlP0YTpTXVoKD6tsnXwGnEQNGVJc4Z9l6MsJ0/V3RPdIg84E5K3wGSOg8Zm+CsArngUOJjfNdkPlezHIFodBqdvRGYla0lEZ7FQ5CPJf8h63Ty1HHfne11yS+NDk/pl2Fra1zlmfL3GkCneny2aidcm6iShfmp+vp0mU2BsHUEZqzb2luVsV2iGji0t+usA0GC0Us9BUlYN+bxKB6Kk86l5d1DyLl4n2H+nP43jFpqjJZoHN3pHQq1f1GnhkaqVt2W6bVjbMRfRFayuWpbm+Yduzn/v/9BWaHI30ofwcBUfEbk3R74tRFTRj+HSN5YS0wknz5WoxAgMBAAEwDQYJKoZIhvcNAQELBQADggEBABm7FLL6S8KHsnGK+c7pTRGGtLm72uFuRMIq5Oij7vhUSfd/9vvFFDC59jUVpykNJwsQizTBK8Fii7VtnzW95MUk6Smc2Mu/nmTswTkVJMBI51l6NCZKId4fGwLaT30KkiQew3cigKO8gw/zhR8pQvKOEqUQrxP6mgn/lGWgqrOpa1hiyK5Ox0LDrixZ/9BIw4XAe+gydXZb4Grg0KZZhKD4SKK9MFcwHkA4aFK4BzczAddAmAVtQFF6Z1Pjyg1/gHah3BKFViOdX79J0HvZlCg5ly2TDVuGCkGIi14qjP27Y/bHhLjZrQEvt7JWTocYhQ9D1/j4ejb0MtIqD8N/H0w="],"x5t":"Z0pZP69GJOG5IZsumY0LiycQ6no","x5t#S256":"NuygL8MBbIA6oDmQA8ZNJHpxmaTKcbpqfhCxYZM_MdM"},{"kid":"H8ow2lLfIRwKanwVrDEMf4QqBvaV3yJ82SKhvTplIYE","kty":"RSA","alg":"RSA-OAEP","use":"enc","n":"rbIKVuBXtwA2yAdHv-aUuYUfy7p0tdAkw8JjBXr7HqRULRs06PY7fsrxmHG9Pz_xLELUT8ttuBllvpkM0BNohiV58swz_rJeHg6rawL3lcfl9JZWvi-2JVZD4woQEZbBjvy5hQrhdh9TJvAy2-JDX6gN1XEGIPIvOIgUmJj125Pw7jACZl3DMmF5bNEBMOgx4bwuvU8u8V4migwnZ4Il5KHux2E8-GtTss9zsXfU1OxKhtbFgl8hNiLMiCJbT4bOP6uoQhid2zc91erTQJFuBTBRCONLyo9yUkuta5rcbpETXhi82rW0zNvkHiRRlfsjlwGYiRDIaeax847zmsV5lQ","e":"AQAB","x5c":["MIIClTCCAX0CBgGMW8pfZzANBgkqhkiG9w0BAQsFADAOMQwwCgYDVQQDDAN1ZHMwHhcNMjMxMjEyMDIwODU4WhcNMzMxMjEyMDIxMDM4WjAOMQwwCgYDVQQDDAN1ZHMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCtsgpW4Fe3ADbIB0e/5pS5hR/LunS10CTDwmMFevsepFQtGzTo9jt+yvGYcb0/P/EsQtRPy224GWW+mQzQE2iGJXnyzDP+sl4eDqtrAveVx+X0lla+L7YlVkPjChARlsGO/LmFCuF2H1Mm8DLb4kNfqA3VcQYg8i84iBSYmPXbk/DuMAJmXcMyYXls0QEw6DHhvC69Ty7xXiaKDCdngiXkoe7HYTz4a1Oyz3Oxd9TU7EqG1sWCXyE2IsyIIltPhs4/q6hCGJ3bNz3V6tNAkW4FMFEI40vKj3JSS61rmtxukRNeGLzatbTM2+QeJFGV+yOXAZiJEMhp5rHzjvOaxXmVAgMBAAEwDQYJKoZIhvcNAQELBQADggEBABe0judqVmu49JQGXe6RmV4PnQ70myJj3xZtf2ychJLp8wc8/5c1cRs6Jf/4oWtlCpTF6lRYKBCqeVJw4hz/6XDrG+AHMQchDE6w6tB1zb49AEhZLAmgxP0QEVUYszt9qxFX2wXyf4PHj5goGlMMWuqh7CUJe7zrIsZfOefbVIvyMJ8qRFFWH1xYiufxRHYeMsWZlfx1vn9AmpnoPJnbAdx6wPMFrEyNkFKXtCJS8wyXwD9Ec1CwBxV3PyFQL+TtaVOc1pOqC28GuvcktJWFjWmcUW9PiWrn6bdu+x/6W0bLA6GrhiRtWSsdBC8RZ8kyelbv/sTrFz7Lh45M8wKWfSs="],"x5t":"QBPagxCybTiYCVm64nWbJxIyyXg","x5t#S256":"PU_GKReohtxuPQFIzZhls1HcSxRo0ApMUZ7e4eZ7AgM"}]}',
                 "client_id": "bookinfo",
                 "client_secret": "16kcHDKJngKNjOFgXRlOYoMjkQwYApGr",
@@ -226,7 +225,7 @@ data:
                 },
                 "logout": {
                   "path": "/authservice_logout",
-                  "redirect_uri": "https://localhost/some/logout/path"
+                  "redirect_uri": "https://localhost:3000/some/logout/path"
                 }
               }
             }
@@ -272,7 +271,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: productpage
+      app: istio-ingressgateway
   jwtRules:
   - issuer: "https://localhost/realms/uds"
     jwks: '{"keys":[{"kid":"COyMcu1srOaSWwYdFm4ply8nMVhYdTv4FJDC6bNyHFk","kty":"RSA","alg":"RS256","use":"sig","n":"8XsiNnMqUbRoPSJT9GE6U11aCg-rbJ18BpxEDRlSXOGfZejLCdP1d0T3SIPOBOSt8BkjoPGZvgrAK54FDiY3zXZD5XsxyBaHQanb0RmJWtJRGexUOQjyX_Iet08tRx353tdckvjQ5P6Zdha2tc5Zny9xpAp3p8tmonXJuokoX5qfr6dJlNgbB1BGas29pblbFdoho4tLfrrANBgtFLPQVJWDfm8SgeipPOpeXdQ8i5eJ9h_pz-N4xaaoyWaBzd6R0KtX9Rp4ZGqlbdlum1Y2zEX0RWsrlqW5vmHbs5_7__QVmhyN9KH8HAVHxG5N0e-LURU0Y_h0jeWEtMJJ8-VqMQ","e":"AQAB","x5c":["MIIClTCCAX0CBgGMW8pePjANBgkqhkiG9w0BAQsFADAOMQwwCgYDVQQDDAN1ZHMwHhcNMjMxMjEyMDIwODU4WhcNMzMxMjEyMDIxMDM4WjAOMQwwCgYDVQQDDAN1ZHMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDxeyI2cypRtGg9IlP0YTpTXVoKD6tsnXwGnEQNGVJc4Z9l6MsJ0/V3RPdIg84E5K3wGSOg8Zm+CsArngUOJjfNdkPlezHIFodBqdvRGYla0lEZ7FQ5CPJf8h63Ty1HHfne11yS+NDk/pl2Fra1zlmfL3GkCneny2aidcm6iShfmp+vp0mU2BsHUEZqzb2luVsV2iGji0t+usA0GC0Us9BUlYN+bxKB6Kk86l5d1DyLl4n2H+nP43jFpqjJZoHN3pHQq1f1GnhkaqVt2W6bVjbMRfRFayuWpbm+Yduzn/v/9BWaHI30ofwcBUfEbk3R74tRFTRj+HSN5YS0wknz5WoxAgMBAAEwDQYJKoZIhvcNAQELBQADggEBABm7FLL6S8KHsnGK+c7pTRGGtLm72uFuRMIq5Oij7vhUSfd/9vvFFDC59jUVpykNJwsQizTBK8Fii7VtnzW95MUk6Smc2Mu/nmTswTkVJMBI51l6NCZKId4fGwLaT30KkiQew3cigKO8gw/zhR8pQvKOEqUQrxP6mgn/lGWgqrOpa1hiyK5Ox0LDrixZ/9BIw4XAe+gydXZb4Grg0KZZhKD4SKK9MFcwHkA4aFK4BzczAddAmAVtQFF6Z1Pjyg1/gHah3BKFViOdX79J0HvZlCg5ly2TDVuGCkGIi14qjP27Y/bHhLjZrQEvt7JWTocYhQ9D1/j4ejb0MtIqD8N/H0w="],"x5t":"Z0pZP69GJOG5IZsumY0LiycQ6no","x5t#S256":"NuygL8MBbIA6oDmQA8ZNJHpxmaTKcbpqfhCxYZM_MdM"},{"kid":"H8ow2lLfIRwKanwVrDEMf4QqBvaV3yJ82SKhvTplIYE","kty":"RSA","alg":"RSA-OAEP","use":"enc","n":"rbIKVuBXtwA2yAdHv-aUuYUfy7p0tdAkw8JjBXr7HqRULRs06PY7fsrxmHG9Pz_xLELUT8ttuBllvpkM0BNohiV58swz_rJeHg6rawL3lcfl9JZWvi-2JVZD4woQEZbBjvy5hQrhdh9TJvAy2-JDX6gN1XEGIPIvOIgUmJj125Pw7jACZl3DMmF5bNEBMOgx4bwuvU8u8V4migwnZ4Il5KHux2E8-GtTss9zsXfU1OxKhtbFgl8hNiLMiCJbT4bOP6uoQhid2zc91erTQJFuBTBRCONLyo9yUkuta5rcbpETXhi82rW0zNvkHiRRlfsjlwGYiRDIaeax847zmsV5lQ","e":"AQAB","x5c":["MIIClTCCAX0CBgGMW8pfZzANBgkqhkiG9w0BAQsFADAOMQwwCgYDVQQDDAN1ZHMwHhcNMjMxMjEyMDIwODU4WhcNMzMxMjEyMDIxMDM4WjAOMQwwCgYDVQQDDAN1ZHMwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCtsgpW4Fe3ADbIB0e/5pS5hR/LunS10CTDwmMFevsepFQtGzTo9jt+yvGYcb0/P/EsQtRPy224GWW+mQzQE2iGJXnyzDP+sl4eDqtrAveVx+X0lla+L7YlVkPjChARlsGO/LmFCuF2H1Mm8DLb4kNfqA3VcQYg8i84iBSYmPXbk/DuMAJmXcMyYXls0QEw6DHhvC69Ty7xXiaKDCdngiXkoe7HYTz4a1Oyz3Oxd9TU7EqG1sWCXyE2IsyIIltPhs4/q6hCGJ3bNz3V6tNAkW4FMFEI40vKj3JSS61rmtxukRNeGLzatbTM2+QeJFGV+yOXAZiJEMhp5rHzjvOaxXmVAgMBAAEwDQYJKoZIhvcNAQELBQADggEBABe0judqVmu49JQGXe6RmV4PnQ70myJj3xZtf2ychJLp8wc8/5c1cRs6Jf/4oWtlCpTF6lRYKBCqeVJw4hz/6XDrG+AHMQchDE6w6tB1zb49AEhZLAmgxP0QEVUYszt9qxFX2wXyf4PHj5goGlMMWuqh7CUJe7zrIsZfOefbVIvyMJ8qRFFWH1xYiufxRHYeMsWZlfx1vn9AmpnoPJnbAdx6wPMFrEyNkFKXtCJS8wyXwD9Ec1CwBxV3PyFQL+TtaVOc1pOqC28GuvcktJWFjWmcUW9PiWrn6bdu+x/6W0bLA6GrhiRtWSsdBC8RZ8kyelbv/sTrFz7Lh45M8wKWfSs="],"x5t":"QBPagxCybTiYCVm64nWbJxIyyXg","x5t#S256":"PU_GKReohtxuPQFIzZhls1HcSxRo0ApMUZ7e4eZ7AgM"}]}'
@@ -285,7 +284,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: productpage
+      app: istio-ingressgateway
   action: ALLOW
   rules:
   - when:
@@ -310,3 +309,6 @@ Jwks doesn't have key to match kid or alg from Jwt
 ```
 
 I think this has to do with the `JWKS_URI`. I want to try with a keycloak w/ trusted CA.
+
+
+`https://0.0.0.0/realms/uds/protocol/openid-connect/auth?client_id=bookinfo&nonce=AbbWvAFjmy4e6vr03gfwu4oaHn4i_zIikAJoYzUx4-0&redirect_uri=https%3A%2F%2Flocalhost%2Fproductpage%2Foauth%2Fcallback&response_type=code&scope=openid&state=eKgUiw9XFQgSDuKLqb3WrM1YIJmcaReaCw84GpvyZwY`
