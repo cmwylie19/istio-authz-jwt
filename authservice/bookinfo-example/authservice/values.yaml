@@ -13,9 +13,9 @@ oidc:
   # JSON string containing the identity provider's public key for validating id token.
   # jwks: "<>"
 
-  idpURL: https://0.0.0.0:8443/realms/uds
+  idpURL: https://0.0.0.0/realms/uds
   # authorizationURI: "https://accounts.google.com/o/oauth2/v2/auth"
-  authorizationURI: "https://0.0.0.0:8443/realms/uds/protocol/openid-connect/auth"
-  tokenURI: "https://0.0.0.0:8443/realms/uds/protocol/openid-connect/token"
+  authorizationURI: "https://0.0.0.0/realms/uds/protocol/openid-connect/auth"
+  tokenURI: "https://0.0.0.0/realms/uds/protocol/openid-connect/token"
   clientID: bookinfo
   clientSecret: 16kcHDKJngKNjOFgXRlOYoMjkQwYApGr
