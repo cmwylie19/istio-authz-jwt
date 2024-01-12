@@ -18,4 +18,4 @@ oidc:
   authorizationURI: "https://0.0.0.0/realms/uds/protocol/openid-connect/auth"
   tokenURI: "https://0.0.0.0/realms/uds/protocol/openid-connect/token"
   clientID: bookinfo
-  clientSecret: 16kcHDKJngKNjOFgXRlOYoMjkQwYApGr
+  clientSecret: HUxhR8ZC2ApiI3LOonoD5Tfx79x5I9tc
